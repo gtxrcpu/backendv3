@@ -1,39 +1,37 @@
-require('dotenv').config(); // Load variabel dari .env
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 
 const app = express();
-
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// ✅ Koneksi ke MongoDB pakai variabel di .env
+// Koneksi ke MongoDB pakai env variable
 mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
+  useNewUrlParser: true, // Boleh dihapus kalau muncul warning, tapi tidak error
+  useUnifiedTopology: true // Boleh dihapus juga kalau warning
 })
-.then(() => console.log('✅ Connected to MongoDB'))
-.catch((err) => console.error('❌ MongoDB connection error:', err));
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
-// ✅ Import routes
-const chatRoutes = require('./routes/chatbot');
-const commentRoutes = require('./routes/comments');
-const ratingRoutes = require('./routes/rating');
-
-// ✅ Gunakan routes
-app.use('/chatbot', chatRoutes);
-app.use('/comments', commentRoutes);
-app.use('/rating', ratingRoutes);
-
-// ✅ Endpoint root opsional
+// Test endpoint untuk cek apakah backend running
 app.get('/', (req, res) => {
-  res.send('🚀 Backend Server is running and connected to MongoDB!');
+  res.send('Backend is running!');
 });
 
-// ✅ Jalankan server
+// Test endpoint untuk cek koneksi MongoDB
+app.get('/test-db', async (req, res) => {
+  try {
+    const admin = mongoose.connection.db.admin();
+    const result = await admin.ping();
+    res.json({ success: true, message: 'MongoDB connection successful!', result });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'MongoDB connection failed', error });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
