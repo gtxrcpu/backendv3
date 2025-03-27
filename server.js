@@ -56,6 +56,21 @@ app.post("/chatbot/ask", async (req, res) => {
   }
 });
 
+// Route untuk comments
+app.get("/comments", (req, res) => {
+  res.json({ message: "Ini adalah route comments" });
+});
+
+// Route untuk chatbot history
+app.get("/chatbot/history", (req, res) => {
+  res.json({ message: "Ini adalah route chatbot history" });
+});
+
+// Route untuk rating
+app.get("/rating", (req, res) => {
+  res.json({ rating: 5.0, voters: 10 });
+});
+
 // Test API
 app.get("/", (req, res) => {
   res.send("🚀 Server is running!");
