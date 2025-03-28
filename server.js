@@ -1,37 +1,34 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const axios = require("axios");
 const mongoose = require("mongoose");
-
-// Import Models
-const Comment = require("./models/Comment");
-const Rating = require("./models/rating");
-const ChatHistory = require("./models/ChatHistory");
+const axios = require("axios");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
-app.use(express.json()); // Penting untuk membaca JSON dari request body
+app.use(express.json());
 
-// Connect to MongoDB
+// MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI;
 mongoose
   .connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-// Debugging API Key OpenRouter
-console.log("🔑 API Key OpenRouter:", process.env.OPENROUTER_API_KEY ? "Ditemukan" : "TIDAK ditemukan");
+// Import Models
+const Comment = require("./models/Comment");
+const Rating = require("./models/rating");
+const ChatHistory = require("./models/ChatHistory");
 
-// ===================== ROUTES =====================
+// ================= ROUTES ================= //
 
-// 🔹 Route: Ambil Semua Komentar
+// 📌 Fetch All Comments (Newest First)
 app.get("/comments", async (req, res) => {
   try {
-    const comments = await Comment.find().sort({ createdAt: -1 }); // Urutkan terbaru ke lama
+    const comments = await Comment.find().sort({ createdAt: -1 });
     res.json(comments);
   } catch (error) {
     console.error("❌ Error fetching comments:", error);
@@ -39,66 +36,61 @@ app.get("/comments", async (req, res) => {
   }
 });
 
-// 🔹 Route: Tambah Komentar Baru
+// 📌 Add New Comment
 app.post("/comments", async (req, res) => {
-  const { text } = req.body;
-  if (!text) return res.status(400).json({ error: "Komentar tidak boleh kosong" });
+  const { name, message } = req.body;
+  if (!name || !message) {
+    return res.status(400).json({ error: "Nama dan pesan tidak boleh kosong" });
+  }
 
   try {
-    const newComment = new Comment({ text });
+    const newComment = new Comment({ name, message, createdAt: new Date() });
     await newComment.save();
     res.status(201).json(newComment);
   } catch (error) {
-    console.error("❌ Error menambahkan komentar:", error);
-    res.status(500).json({ error: "Gagal menambahkan komentar" });
+    console.error("❌ Error menambah komentar:", error);
+    res.status(500).json({ error: "Gagal menambah komentar" });
   }
 });
 
-// 🔹 Route: Ambil Rating
+// 📌 Fetch All Ratings + Hitung Rata-rata
 app.get("/rating", async (req, res) => {
   try {
     const ratings = await Rating.find();
-    if (ratings.length === 0) return res.json({ rating: 0, voters: 0 });
 
-    const total = ratings.reduce((acc, r) => acc + r.value, 0);
-    const average = total / ratings.length;
+    if (!Array.isArray(ratings)) {
+      return res.status(500).json({ error: "Data rating bukan array!" });
+    }
 
-    res.json({ rating: average.toFixed(1), voters: ratings.length });
+    const totalVotes = ratings.length;
+    const totalRating = ratings.reduce((acc, curr) => acc + curr.rating, 0);
+    const averageRating = totalVotes > 0 ? totalRating / totalVotes : 0;
+
+    res.json({ averageRating, totalVotes, ratings });
   } catch (error) {
-    console.error("❌ Error fetching rating:", error);
+    console.error("❌ Error fetching ratings:", error);
     res.status(500).json({ error: "Gagal mengambil rating" });
   }
 });
 
-// 🔹 Route: Tambah Rating Baru
+// 📌 Add New Rating
 app.post("/rating", async (req, res) => {
-  const { value } = req.body;
-  if (!value || value < 1 || value > 5) {
+  const { rating } = req.body; // GANTI KE 'rating' SESUAI SCHEMA
+  if (!rating || rating < 1 || rating > 5) {
     return res.status(400).json({ error: "Rating harus antara 1-5" });
   }
 
   try {
-    const newRating = new Rating({ value });
+    const newRating = new Rating({ rating }); // PASTIKAN PAKAI 'rating'
     await newRating.save();
     res.status(201).json(newRating);
   } catch (error) {
-    console.error("❌ Error menambahkan rating:", error);
-    res.status(500).json({ error: "Gagal menambahkan rating" });
+    console.error("❌ Error menambah rating:", error);
+    res.status(500).json({ error: "Gagal menambah rating" });
   }
 });
 
-// 🔹 Route: Ambil Riwayat Chat
-app.get("/chatbot/history", async (req, res) => {
-  try {
-    const history = await ChatHistory.find().sort({ createdAt: -1 });
-    res.json(history);
-  } catch (error) {
-    console.error("❌ Error fetching chat history:", error);
-    res.status(500).json({ error: "Gagal mengambil riwayat chat" });
-  }
-});
-
-// 🔹 Route: Simpan Riwayat Chat & Kirim ke OpenRouter
+// 📌 Chatbot API
 app.post("/chatbot/ask", async (req, res) => {
   const userMessage = req.body.message;
   if (!userMessage) {
@@ -122,25 +114,12 @@ app.post("/chatbot/ask", async (req, res) => {
       }
     );
 
-    console.log("✅ Response dari OpenRouter:", response.data);
-
-    const botReply = response.data.choices[0].message.content;
-
-    // Simpan ke database
-    const newChat = new ChatHistory({ message: userMessage, response: botReply });
-    await newChat.save();
-
-    res.json({ message: botReply });
+    res.json(response.data);
   } catch (error) {
-    console.error("❌ Error saat request ke OpenRouter:", error.response ? error.response.data : error.message);
-    res.status(500).json({ error: "Terjadi kesalahan dalam mendapatkan respons dari chatbot" });
+    console.error("❌ Error saat request ke OpenRouter:", error.message);
+    res.status(500).json({ error: "Gagal mendapatkan respons dari chatbot" });
   }
 });
 
-// 🔹 Test API
-app.get("/", (req, res) => {
-  res.send("🚀 Server is running!");
-});
-
-// ===================== START SERVER =====================
+// Start Server
 app.listen(PORT, () => console.log(`✅ Server is running on port ${PORT}`));
